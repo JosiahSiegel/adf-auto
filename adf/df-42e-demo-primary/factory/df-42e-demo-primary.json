@@ -1,0 +1,17 @@
+{
+	"name": "df-42e-demo-primary",
+	"properties": {
+		"globalParameters": {
+			"myVar": {
+				"type": "string",
+				"value": "fromPrimary"
+			}
+		}
+	},
+	"location": "eastus",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "e43ec03a-9815-4159-aaa0-e40e66c00532",
+		"tenantId": "da67ef1b-ca59-4db2-9a8c-aa8d94617a16"
+	}
+}

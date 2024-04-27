@@ -1,0 +1,28 @@
+parameters:
+  subscriptionId: ''
+  sourceDataFactoryName: ''
+  sourceResourceGroupName: ''
+
+steps:
+- task: UseNode@1
+  inputs:
+    version: '18.x'
+  displayName: 'Install Node.js'
+
+- task: Npm@1
+  inputs:
+    command: 'install'
+    workingDir: '$(Build.Repository.LocalPath)/.devops'
+    verbose: true
+  displayName: 'Install npm package'
+
+- task: Npm@1
+  inputs:
+    command: 'custom'
+    workingDir: '$(Build.Repository.LocalPath)/.devops'
+    customCommand: 'run build export $(Build.Repository.LocalPath)/adf/${{ parameters.sourceDataFactoryName }} /subscriptions/${{ parameters.subscriptionId }}/resourceGroups/${{ parameters.sourceResourceGroupName }}/providers/Microsoft.DataFactory/factories/${{ parameters.sourceDataFactoryName }} "ArmTemplate"'
+  displayName: 'Validate and Generate ARM template'
+
+- publish: '$(Build.Repository.LocalPath)/.devops/ArmTemplate/'
+  displayName: 'Publish ARM templates'
+  artifact: drop

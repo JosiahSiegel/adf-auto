@@ -1,0 +1,72 @@
+parameters:
+- name: azureSubscription
+  type: string
+  default: ''
+- name: targetDataFactoryName
+  type: string
+  default: ''
+- name: targetResourceGroupName
+  type: string
+  default: ''
+- name: additionalParameters
+  type: object
+  default: []
+
+
+steps:
+- download: current
+  artifact: drop
+
+- task: AzurePowerShell@5
+  displayName: Stop Triggers
+  inputs:
+    azureSubscription: '${{ parameters.azureSubscription }}'
+    ScriptType: 'InlineScript'
+    Inline: 
+      $triggersADF = Get-AzDataFactoryV2Trigger -DataFactoryName
+      "${{ parameters.targetDataFactoryName }}" -ResourceGroupName "${{ parameters.targetResourceGroupName }}";
+      $triggersADF | ForEach-Object { Stop-AzDataFactoryV2Trigger
+      –ResourceGroupName "${{ parameters.targetResourceGroupName }}" -DataFactoryName
+      "${{ parameters.targetDataFactoryName }}" -Name $_.name -Force }
+    azurePowerShellVersion: 'LatestVersion'
+
+- task: AzurePowerShell@5
+  displayName: Deploy ADF
+  inputs:
+    azureSubscription: '${{ parameters.azureSubscription }}'
+    ScriptType: 'InlineScript'
+    Inline: |
+      $parameterOverrides = @{}
+      
+      $additionalParameters = '${{ convertToJson(parameters.additionalParameters) }}' | ConvertFrom-Json
+      
+      if ($null -ne $additionalParameters -and $additionalParameters -ne '[]') {
+        foreach ($parameter in $additionalParameters.PSObject.Properties) {
+          if ($parameter.Name.StartsWith('__secure__')) {
+            $secureParameterName = $parameter.Name.Substring('__secure__'.Length)
+            $secureString = ConvertTo-SecureString -String $parameter.Value -AsPlainText -Force
+            $parameterOverrides[$secureParameterName] = $secureString
+          } else {
+            $parameterOverrides[$parameter.Name] = $parameter.Value
+          }
+        }
+      }
+
+      New-AzResourceGroupDeployment `
+        -ResourceGroupName "${{ parameters.targetResourceGroupName }}" `
+        -TemplateParameterFile "$(Pipeline.Workspace)/drop/ARMTemplateParametersForFactory.json" `
+        -TemplateFile "$(Pipeline.Workspace)/drop/ARMTemplateForFactory.json" `
+        -factoryName "${{ parameters.targetDataFactoryName }}" `
+        @parameterOverrides `
+        -Mode "Incremental"
+    azurePowerShellVersion: 'LatestVersion'
+
+- task: AzurePowerShell@5
+  displayName: Restart Triggers
+  inputs:
+    azureSubscription: '${{ parameters.azureSubscription }}'
+    ScriptType: 'InlineScript'
+    Inline: 
+      $triggersADF = Get-AzDataFactoryV2Trigger -DataFactoryName   "${{ parameters.targetDataFactoryName }}" -ResourceGroupName "${{ parameters.targetResourceGroupName }}";
+      $triggersADF | ForEach-Object { Start-AzDataFactoryV2Trigger -ResourceGroupName "${{ parameters.targetResourceGroupName }}" -DataFactoryName "${{ parameters.targetDataFactoryName }}" -Name $_.name -Force }
+    azurePowerShellVersion: 'LatestVersion'

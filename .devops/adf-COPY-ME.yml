@@ -1,0 +1,129 @@
+trigger:
+  branches:
+    include:
+    - main
+  paths:
+    include:
+    - adf/df-42e-demo-dev
+
+pool:
+  name: 'Default'
+
+variables:
+  ServiceConnection: 'demo-rg'
+  subscriptionId: 'ff5f335c-3727-493e-9dc0-0aad424b456d'
+  sourceDataFactoryName: 'df-42e-demo-dev'
+  sourceResourceGroupName: 'demo'
+
+stages:
+- stage: Build
+  displayName: Build stage
+  jobs:
+    - job: Build
+      displayName: Build job
+      pool:
+        name: 'Default'
+      steps:
+        - template: lib/_adf-build-tasks.yml
+          parameters:
+            subscriptionId: $(subscriptionId)
+            sourceDataFactoryName: $(sourceDataFactoryName)
+            sourceResourceGroupName: $(sourceResourceGroupName)
+
+- stage: DeployNonProd
+  displayName: Deploy to Non-prod Environment
+  jobs:
+    - deployment: DeployQA
+      displayName: Deploy to QA
+      condition: succeeded()
+      environment: QA
+      pool:
+        name: 'Default'
+      variables:
+        targetDataFactoryName: 'df-42e-demo-qa'
+        targetResourceGroupName: 'demo'
+        keyVaultName: 'kv-42e-demo-primary'
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - task: AzureKeyVault@2
+              inputs:
+                azureSubscription: $(ServiceConnection)
+                KeyVaultName: $(KeyVaultName)
+                SecretsFilter: '*'
+                RunAsPreJob: true
+            - template: lib/_adf-release-tasks.yml
+              parameters:
+                azureSubscription: $(ServiceConnection)
+                targetDataFactoryName: $(targetDataFactoryName)
+                targetResourceGroupName: $(targetResourceGroupName)
+                additionalParameters:
+                  AzureKeyVault1_properties_typeProperties_baseUrl: 'https://kv-42e-demo-primary.vault.azure.net/'
+                  __secure__AzureSqlDatabase1_connectionString: 'Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=sqlserver-42e-demo-secondary.database.windows.net;Initial Catalog=trialdb;User ID=demoadmin'
+                  default_properties_myVar_value: 'QA'
+                  # Pass other parameters
+    - deployment: DeployUAT
+      dependsOn:
+      - DeployQA
+      displayName: Deploy to UAT
+      condition: succeeded()
+      environment: UAT
+      pool:
+        name: 'Default'
+      variables:
+        targetDataFactoryName: 'df-42e-demo-uat'
+        targetResourceGroupName: 'demo'
+        keyVaultName: 'kv-42e-demo-primary'
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - task: AzureKeyVault@2
+              inputs:
+                azureSubscription: $(ServiceConnection)
+                KeyVaultName: $(KeyVaultName)
+                SecretsFilter: '*'
+                RunAsPreJob: true
+            - template: lib/_adf-release-tasks.yml
+              parameters:
+                azureSubscription: $(ServiceConnection)
+                targetDataFactoryName: $(targetDataFactoryName)
+                targetResourceGroupName: $(targetResourceGroupName)
+                #additionalParameters:
+                  # Pass other parameters
+- stage: DeployProd
+  displayName: Deploy to Prod Environment
+  dependsOn:
+  - DeployNonProd
+  jobs:
+    - deployment: DeployProd
+      displayName: Deploy to Production
+      condition: succeeded()
+      environment: Production
+      pool:
+        name: 'Default'
+      variables:
+        targetDataFactoryName: 'df-42e-demo-prod'
+        targetResourceGroupName: 'demo'
+        keyVaultName: 'kv-42e-demo-primary'
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - task: AzureKeyVault@2
+              inputs:
+                azureSubscription: $(ServiceConnection)
+                KeyVaultName: $(KeyVaultName)
+                SecretsFilter: '*'
+                RunAsPreJob: true
+            - template: lib/_adf-release-tasks.yml
+              parameters:
+                azureSubscription: $(ServiceConnection)
+                targetDataFactoryName: $(targetDataFactoryName)
+                targetResourceGroupName: $(targetResourceGroupName)
+                additionalParameters:
+                  AzureKeyVault1_properties_typeProperties_baseUrl: 'https://kv-42e-demo-primary.vault.azure.net/'
+                  __secure__AzureSqlDatabase1_connectionString: 'Integrated Security=False;Encrypt=True;Connection Timeout=30;Data Source=sqlserver-42e-demo-primary.database.windows.net;Initial Catalog=trialdb;User ID=demoadmin'
+                  default_properties_myVar_value: 'Prod'
+                  # Pass other parameters

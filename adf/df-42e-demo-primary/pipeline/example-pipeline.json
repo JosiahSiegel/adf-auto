@@ -1,0 +1,32 @@
+{
+	"name": "example-pipeline",
+	"properties": {
+		"description": "Example pipeline!!",
+		"activities": [
+			{
+				"name": "Set variable",
+				"description": "Example variable!",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "hi",
+					"value": {
+						"value": "@pipeline().globalParameters.myVar",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"variables": {
+			"hi": {
+				"type": "String"
+			}
+		},
+		"annotations": []
+	}
+}
